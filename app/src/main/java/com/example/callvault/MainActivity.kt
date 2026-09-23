@@ -102,9 +102,15 @@ class MainActivity : ComponentActivity() {
             toast("Sending ${entries.size} entries…")
             // Bug 3 fix: network on background thread to avoid NetworkOnMainThreadException
             Thread {
-                val ok = TelegramSender.send(entries, token, chatId)
+                val err = TelegramSender.send(entries, token, chatId)
                 runOnUiThread {
-                    toast(if (ok) "✓ Backup sent to Telegram" else "✗ Send failed — check token/chat ID")
+                    if (err == null) {
+                        toast("✓ Backup sent to Telegram")
+                    } else {
+                        // Show Telegram's exact error so user knows what to fix
+                        toast("✗ $err")
+                        android.util.Log.e("CallVault", "Telegram error: $err")
+                    }
                 }
             }.start()
         }
