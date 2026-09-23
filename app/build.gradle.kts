@@ -33,8 +33,6 @@ android {
         }
     }
 
-<<<<<<< HEAD
-=======
     // Fix: Java (1.8) and Kotlin (17) JVM targets were mismatched → both set to 17
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -44,7 +42,6 @@ android {
         jvmTarget = "17"
     }
 
->>>>>>> 58b4092 (Update call app)
     buildFeatures { buildConfig = true }
 }
 
