@@ -12,23 +12,22 @@ object TelegramSender {
         1 to "Incoming", 2 to "Outgoing", 3 to "Missed",
         4 to "Voicemail", 5 to "Rejected", 6 to "Blocked"
     )
-    private val SDF = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
-    private val BOUNDARY = "----CallVaultBoundary${System.currentTimeMillis()}"
+    private val SDF  = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+    private val BOUNDARY = "CallVaultBoundary${System.currentTimeMillis()}"
 
-    // Returns null on success, error string on failure
     fun send(entries: List<CallEntry>, token: String, chatId: String): String? {
         return try {
-            val csvBytes = buildCsv(entries).toByteArray(Charsets.UTF_8)
+            val csv      = buildCsv(entries)
             val fileName = "callvault_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())}.csv"
-            sendDocument(token, chatId, fileName, csvBytes)
+            val caption  = "CallVault Backup - ${entries.size} entries"
+            sendDocument(token, chatId, fileName, csv.toByteArray(Charsets.UTF_8), caption)
         } catch (e: Exception) {
             e.message ?: "Unknown error"
         }
     }
 
     private fun buildCsv(entries: List<CallEntry>): String {
-        val sb = StringBuilder()
-        sb.append("Type,Number,Date,Duration(s)\n")
+        val sb = StringBuilder("Type,Number,Date,Duration(s)\n")
         entries.forEach { e ->
             val type = TYPE_LABEL[e.type] ?: "Unknown"
             val num  = e.number.ifBlank { "Unknown" }.replace(",", " ")
@@ -38,10 +37,9 @@ object TelegramSender {
         return sb.toString()
     }
 
-    // Send as file using multipart/form-data → Telegram sendDocument
     private fun sendDocument(
         token: String, chatId: String,
-        fileName: String, fileBytes: ByteArray
+        fileName: String, fileBytes: ByteArray, caption: String
     ): String? {
         val url  = URL("https://api.telegram.org/bot$token/sendDocument")
         val conn = url.openConnection() as HttpURLConnection
@@ -52,36 +50,39 @@ object TelegramSender {
         conn.doOutput = true
 
         DataOutputStream(conn.outputStream).use { out ->
-            // chat_id field
-            out.writeBytes("--$BOUNDARY\r\n")
-            out.writeBytes("Content-Disposition: form-data; name=\"chat_id\"\r\n\r\n")
-            out.writeBytes("$chatId\r\n")
-
-            // caption field
-            out.writeBytes("--$BOUNDARY\r\n")
-            out.writeBytes("Content-Disposition: form-data; name=\"caption\"\r\n\r\n")
-            out.writeBytes("📞 CallVault Backup — ${fileBytes.toString(Charsets.UTF_8).lines().size - 2} entries\r\n")
-
-            // document file field
-            out.writeBytes("--$BOUNDARY\r\n")
-            out.writeBytes("Content-Disposition: form-data; name=\"document\"; filename=\"$fileName\"\r\n")
-            out.writeBytes("Content-Type: text/csv\r\n\r\n")
-            out.write(fileBytes)
-            out.writeBytes("\r\n")
-
-            // closing boundary
-            out.writeBytes("--$BOUNDARY--\r\n")
+            // Fix: use writePart() which encodes everything as UTF-8 bytes
+            // writeBytes() was dropping high bytes of Unicode chars → Bad Request
+            writePart(out, "chat_id", chatId.toByteArray(Charsets.UTF_8))
+            writePart(out, "caption", caption.toByteArray(Charsets.UTF_8))
+            writeFilePart(out, "document", fileName, fileBytes)
+            out.write("--$BOUNDARY--\r\n".toByteArray(Charsets.UTF_8))
             out.flush()
         }
 
         val code = conn.responseCode
-        if (code == 200) return null  // success
+        if (code == 200) return null
 
         val body = try {
             (conn.errorStream ?: conn.inputStream).bufferedReader().readText()
         } catch (e: Exception) { "(no body)" }
-
         conn.disconnect()
         return "HTTP $code — $body"
+    }
+
+    // Plain text field
+    private fun writePart(out: DataOutputStream, name: String, value: ByteArray) {
+        out.write("--$BOUNDARY\r\n".toByteArray(Charsets.UTF_8))
+        out.write("Content-Disposition: form-data; name=\"$name\"\r\n\r\n".toByteArray(Charsets.UTF_8))
+        out.write(value)
+        out.write("\r\n".toByteArray(Charsets.UTF_8))
+    }
+
+    // File field
+    private fun writeFilePart(out: DataOutputStream, name: String, fileName: String, fileBytes: ByteArray) {
+        out.write("--$BOUNDARY\r\n".toByteArray(Charsets.UTF_8))
+        out.write("Content-Disposition: form-data; name=\"$name\"; filename=\"$fileName\"\r\n".toByteArray(Charsets.UTF_8))
+        out.write("Content-Type: text/csv\r\n\r\n".toByteArray(Charsets.UTF_8))
+        out.write(fileBytes)
+        out.write("\r\n".toByteArray(Charsets.UTF_8))
     }
 }
