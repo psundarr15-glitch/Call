@@ -34,8 +34,8 @@ object ScheduleHelper {
     private fun delayToNext5AM(): Long {
         val now = Calendar.getInstance()
         val target = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 5)
-            set(Calendar.MINUTE, 0)
+            set(Calendar.HOUR_OF_DAY, 7)
+            set(Calendar.MINUTE, 20)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
             // Already past 5 AM today → schedule tomorrow
