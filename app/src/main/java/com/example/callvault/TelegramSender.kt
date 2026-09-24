@@ -12,18 +12,26 @@ object TelegramSender {
         1 to "Incoming", 2 to "Outgoing", 3 to "Missed",
         4 to "Voicemail", 5 to "Rejected", 6 to "Blocked"
     )
-    private val SDF  = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+    private val SDF      = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+    private val DATE_FMT = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
     private val BOUNDARY = "CallVaultBoundary${System.currentTimeMillis()}"
 
-    fun send(entries: List<CallEntry>, token: String, chatId: String): String? {
+    // lastBackup = 0 means first ever backup (all calls)
+    fun send(entries: List<CallEntry>, token: String, chatId: String, lastBackup: Long): String? {
         return try {
             val csv      = buildCsv(entries)
-            val fileName = "callvault_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())}.csv"
-            val caption  = "CallVault Backup - ${entries.size} entries"
+            val fileName = "callvault_${SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())}.csv"
+            val caption  = buildCaption(entries, lastBackup)
             sendDocument(token, chatId, fileName, csv.toByteArray(Charsets.UTF_8), caption)
         } catch (e: Exception) {
             e.message ?: "Unknown error"
         }
+    }
+
+    private fun buildCaption(entries: List<CallEntry>, lastBackup: Long): String {
+        val range = if (lastBackup == 0L) "All calls"
+                    else "Since ${DATE_FMT.format(Date(lastBackup))}"
+        return "CallVault Backup - ${entries.size} new entries ($range)"
     }
 
     private fun buildCsv(entries: List<CallEntry>): String {
@@ -50,8 +58,6 @@ object TelegramSender {
         conn.doOutput = true
 
         DataOutputStream(conn.outputStream).use { out ->
-            // Fix: use writePart() which encodes everything as UTF-8 bytes
-            // writeBytes() was dropping high bytes of Unicode chars → Bad Request
             writePart(out, "chat_id", chatId.toByteArray(Charsets.UTF_8))
             writePart(out, "caption", caption.toByteArray(Charsets.UTF_8))
             writeFilePart(out, "document", fileName, fileBytes)
@@ -69,7 +75,6 @@ object TelegramSender {
         return "HTTP $code — $body"
     }
 
-    // Plain text field
     private fun writePart(out: DataOutputStream, name: String, value: ByteArray) {
         out.write("--$BOUNDARY\r\n".toByteArray(Charsets.UTF_8))
         out.write("Content-Disposition: form-data; name=\"$name\"\r\n\r\n".toByteArray(Charsets.UTF_8))
@@ -77,7 +82,6 @@ object TelegramSender {
         out.write("\r\n".toByteArray(Charsets.UTF_8))
     }
 
-    // File field
     private fun writeFilePart(out: DataOutputStream, name: String, fileName: String, fileBytes: ByteArray) {
         out.write("--$BOUNDARY\r\n".toByteArray(Charsets.UTF_8))
         out.write("Content-Disposition: form-data; name=\"$name\"; filename=\"$fileName\"\r\n".toByteArray(Charsets.UTF_8))
