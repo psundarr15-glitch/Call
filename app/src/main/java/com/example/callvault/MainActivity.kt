@@ -29,8 +29,6 @@ class MainActivity : ComponentActivity() {
         setPadding(48, 48, 48, 48)
     }
 
-    // Bug 1 fix: was inputType=2 (TYPE_CLASS_NUMBER) — digits showed in plaintext while typing
-    // Now: TYPE_CLASS_NUMBER | TYPE_NUMBER_VARIATION_PASSWORD = 18 — digits are masked
     private fun pinField(hint: String) = EditText(this).apply {
         this.hint = hint
         inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
@@ -69,6 +67,7 @@ class MainActivity : ComponentActivity() {
     private fun openVault() {
         unlocked = true
         last = SystemClock.elapsedRealtime()
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -76,13 +75,20 @@ class MainActivity : ComponentActivity() {
                 this, arrayOf(Manifest.permission.READ_CALL_LOG), 10
             )
         }
+
+        // Schedule 5 AM daily auto-backup (no manual button)
+        ScheduleHelper.scheduleDailyAt5AM(this)
+        val hours = ScheduleHelper.hoursUntil5AM()
+        toast("Auto-backup scheduled — next run in ${hours}h at 5:00 AM")
+
         val l = box()
-        l.addView(TextView(this).apply { text = "CallVault\nEncrypted call-log vault"; textSize = 22f })
-        val r = Button(this).apply { text = "Read Call Logs" }
-        // Bug 2 fix: "Backup to Telegram" button — was completely missing
-        val s = Button(this).apply { text = "Backup to Telegram" }
+        l.addView(TextView(this).apply {
+            text = "CallVault\nAuto-backup: daily 5:00 AM"
+            textSize = 22f
+        })
+        val r = Button(this).apply { text = "View Call Log Count" }
         val z = Button(this).apply { text = "Lock" }
-        l.addView(r); l.addView(s); l.addView(z)
+        l.addView(r); l.addView(z)
         setContentView(l)
 
         r.setOnClickListener {
@@ -90,35 +96,9 @@ class MainActivity : ComponentActivity() {
             toast("Found ${CallLogReader(this).read().size} entries")
         }
 
-        s.setOnClickListener {
-            last = SystemClock.elapsedRealtime()
-            val token  = BuildConfig.TELEGRAM_BOT_TOKEN
-            val chatId = BuildConfig.TELEGRAM_CHAT_ID
-            if (token.isBlank() || chatId.isBlank()) {
-                toast("Telegram not configured in build"); return@setOnClickListener
-            }
-            val entries = CallLogReader(this).read()
-            if (entries.isEmpty()) { toast("No call log entries"); return@setOnClickListener }
-            toast("Sending ${entries.size} entries…")
-            // Bug 3 fix: network on background thread to avoid NetworkOnMainThreadException
-            Thread {
-                val err = TelegramSender.send(entries, token, chatId)
-                runOnUiThread {
-                    if (err == null) {
-                        toast("✓ Backup sent to Telegram")
-                    } else {
-                        // Show Telegram's exact error so user knows what to fix
-                        toast("✗ $err")
-                        android.util.Log.e("CallVault", "Telegram error: $err")
-                    }
-                }
-            }.start()
-        }
-
         z.setOnClickListener { unlocked = false; unlockScreen() }
     }
 
-    // Bug 6 fix: missing onRequestPermissionsResult — user got no feedback on denial
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<String>, grantResults: IntArray
     ) {
@@ -130,7 +110,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
+    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
 
     override fun onUserInteraction() {
         super.onUserInteraction()

@@ -16,8 +16,6 @@ android {
     }
 
     buildTypes {
-        // Bug 5 fix: release type was missing Telegram config entirely
-        // Both debug and release now receive TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
         debug {
             val t = providers.gradleProperty("TELEGRAM_BOT_TOKEN").orElse("")
             val c = providers.gradleProperty("TELEGRAM_CHAT_ID").orElse("")
@@ -33,7 +31,6 @@ android {
         }
     }
 
-    // Fix: Java (1.8) and Kotlin (17) JVM targets were mismatched → both set to 17
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -49,4 +46,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.activity:activity-ktx:1.10.0")
+    // WorkManager for 5 AM scheduled backup
+    implementation("androidx.work:work-runtime:2.9.0")
 }
