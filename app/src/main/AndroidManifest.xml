@@ -7,8 +7,8 @@
     <application
         android:theme="@style/Theme.CallVault"
         android:label="JEEVI"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/ic_callvault_logo"
+        android:roundIcon="@drawable/ic_callvault_logo"
         android:allowBackup="false">
 
         <activity
