@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#07080C</color>
-    <color name="surface">#10121A</color>
-    <color name="card">#151824</color>
-    <color name="led">#C9A45C</color>
-    <color name="led_dim">#3A3020</color>
-    <color name="text_primary">#F7F5F0</color>
-    <color name="text_muted">#858B9A</color>
-    <color name="divider">#242735</color>
+    <color name="bg">#050505</color>
+    <color name="surface">#0F0F0F</color>
+    <color name="card">#141414</color>
+    <color name="led">#00E676</color>
+    <color name="led_dim">#00361A</color>
+    <color name="text_primary">#EEEEEE</color>
+    <color name="text_muted">#3A3A3A</color>
+    <color name="divider">#1C1C1C</color>
 </resources>
