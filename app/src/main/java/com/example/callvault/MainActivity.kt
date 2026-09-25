@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.core.app.ActivityCompat
@@ -64,7 +65,7 @@ class MainActivity : ComponentActivity() {
         val scrollView = ScrollView(this).apply {
             setBackgroundColor(BG)
             isFillViewport = true
-            addView(content, ScrollView.LayoutParams(-1, -2))
+            addView(content, ViewGroup.LayoutParams(-1, -2))
         }
         val wrapper = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
