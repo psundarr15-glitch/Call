@@ -12,36 +12,36 @@ object TelegramSender {
         1 to "Incoming", 2 to "Outgoing", 3 to "Missed",
         4 to "Voicemail", 5 to "Rejected", 6 to "Blocked"
     )
-    private val SDF      = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+    private val SDF = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
     private val DATE_FMT = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
     private val BOUNDARY = "JeeviBoundary${System.currentTimeMillis()}"
 
-    fun send(entries: List<CallEntry>, token: String, chatId: String, since: Long): String? {
+    fun send(entries: List<CallEntry>, token: String, chatId: String,
+             start: Long, end: Long): String? {
         return try {
-            val csv      = buildCsv(entries)
-            val fileName = "jeevi_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())}.csv"
-            val sinceStr = if (since == 0L) "All calls" else "Since ${DATE_FMT.format(Date(since))}"
-            val deleted  = entries.count { it.deleted }
-            val caption  = buildString {
-                append("JEEVI Backup - ${entries.size} calls ($sinceStr)")
-                if (deleted > 0) append(" | $deleted deleted from phone")
+            val csv = buildCsv(entries)
+            val fileName = "jeevi_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date(end))}.csv"
+            val window = "${DATE_FMT.format(Date(start))} to ${DATE_FMT.format(Date(end))}"
+            val deleted = entries.count { it.deleted }
+            val caption = buildString {
+                append("JEEVI Backup | $window | ${entries.size} calls")
+                if (deleted > 0) append(" | $deleted DELETED")
             }
             sendDocument(token, chatId, fileName, csv.toByteArray(Charsets.UTF_8), caption)
         } catch (e: Exception) { e.message ?: "Unknown error" }
     }
 
-    fun sendNoBackup(token: String, chatId: String): String? {
-        val time = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date())
-        return sendText(token, chatId, "JEEVI | $time | No new calls in this window")
+    fun sendNoBackup(token: String, chatId: String, start: Long, end: Long): String? {
+        val window = "${DATE_FMT.format(Date(start))} to ${DATE_FMT.format(Date(end))}"
+        return sendText(token, chatId, "JEEVI | $window | No calls in this window")
     }
 
     private fun buildCsv(entries: List<CallEntry>): String {
         val sb = StringBuilder("Status,Type,Number,Date,Duration(s)\n")
         entries.forEach { e ->
-            // Mark calls removed from the phone call log clearly in the backup.
             val status = if (e.deleted) "DELETED 🗑" else "OK"
-            val type   = TYPE_LABEL[e.type] ?: "Unknown"
-            val num    = e.number.ifBlank { "Unknown" }.replace(",", " ")
+            val type = TYPE_LABEL[e.type] ?: "Unknown"
+            val num = e.number.ifBlank { "Unknown" }.replace(",", " ")
             sb.append("$status,$type,$num,${SDF.format(Date(e.date))},${e.duration}\n")
         }
         return sb.toString()
@@ -49,12 +49,12 @@ object TelegramSender {
 
     private fun sendText(token: String, chatId: String, text: String): String? {
         return try {
-            val url  = URL("https://api.telegram.org/bot$token/sendMessage")
+            val url = URL("https://api.telegram.org/bot$token/sendMessage")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             conn.connectTimeout = 15_000; conn.readTimeout = 15_000; conn.doOutput = true
-            val escaped = text.replace("\\","\\\\").replace("\"","\\\"")
+            val escaped = text.replace("\\", "\\\\").replace("\"", "\\\"")
             DataOutputStream(conn.outputStream).use {
                 it.write("{\"chat_id\":\"$chatId\",\"text\":\"$escaped\"}".toByteArray(Charsets.UTF_8))
             }
@@ -63,9 +63,9 @@ object TelegramSender {
     }
 
     private fun sendDocument(token: String, chatId: String, fileName: String,
-                              fileBytes: ByteArray, caption: String): String? {
+                             fileBytes: ByteArray, caption: String): String? {
         return try {
-            val url  = URL("https://api.telegram.org/bot$token/sendDocument")
+            val url = URL("https://api.telegram.org/bot$token/sendDocument")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$BOUNDARY")
@@ -74,14 +74,12 @@ object TelegramSender {
                 writePart(out, "chat_id", chatId.toByteArray(Charsets.UTF_8))
                 writePart(out, "caption", caption.toByteArray(Charsets.UTF_8))
                 writeFilePart(out, "document", fileName, fileBytes)
-                out.write("--$BOUNDARY--\r\n".toByteArray(Charsets.UTF_8))
-                out.flush()
+                out.write("--$BOUNDARY--\r\n".toByteArray(Charsets.UTF_8)); out.flush()
             }
             val code = conn.responseCode
-            if (code == 200) null
-            else {
+            if (code == 200) null else {
                 val body = try { (conn.errorStream ?: conn.inputStream).bufferedReader().readText() }
-                           catch (e: Exception) { "" }
+                           catch (_: Exception) { "" }
                 "HTTP $code — $body"
             }
         } catch (e: Exception) { e.message }

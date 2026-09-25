@@ -8,10 +8,11 @@ import androidx.work.WorkManager
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // Run backup check (sends calls or "no new calls" message)
+        // Backup exactly the elapsed window since the previous successful backup.
         WorkManager.getInstance(context)
             .enqueue(OneTimeWorkRequestBuilder<BackupWorker>().build())
-        // Schedule the next 4-hour slot
+
+        // Schedule the next HH:00 hourly backup.
         ScheduleHelper.schedule(context)
     }
 }

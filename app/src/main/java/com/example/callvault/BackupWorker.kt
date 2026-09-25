@@ -3,6 +3,9 @@ package com.example.callvault
 import android.content.Context
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
 
@@ -11,50 +14,39 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
         val chatId = BuildConfig.TELEGRAM_CHAT_ID
         if (token.isBlank() || chatId.isBlank()) return Result.failure()
 
-        val store     = CallStore(applicationContext)
-        val lastCheck = store.getLastCheckTime()
-        val now       = System.currentTimeMillis()
+        val store = CallStore(applicationContext)
+        val now = System.currentTimeMillis()
+        val prefs = applicationContext.getSharedPreferences("backup_window", Context.MODE_PRIVATE)
 
-        val allStored = store.readAll()
-        val newCalls  = allStored.filter { it.date > lastCheck }
+        // Every backup owns one time window. Nothing outside this window is sent.
+        val savedStart = prefs.getLong("last_backup_ts", 0L)
+        val start = if (savedStart > 0L) savedStart else now - 60L * 60L * 1000L
+        val end = now
 
-        // Check the CURRENT phone call log against every previously stored call.
-        // This catches calls that were backed up earlier and deleted later.
+        // Calls are captured continuously after each call. Select ONLY calls whose
+        // call-log timestamp belongs to this backup window.
+        val windowCalls = store.readAll()
+            .filter { it.date >= start && it.date < end }
+            .toMutableList()
+
+        // If a call from this same window has been deleted from the phone before
+        // the hourly backup, keep it in the backup and mark it DELETED.
         val systemKeys = CallLogReader(applicationContext).readKeys()
-
-        val deletedKeys = allStored
-            .filter { !it.deleted && it.date <= lastCheck }
-            .filter { "${it.date}_${it.number}" !in systemKeys }
-            .map { "${it.date}_${it.number}" }
-            .toSet()
-
-        if (deletedKeys.isNotEmpty()) {
-            store.markDeleted(deletedKeys)
-        }
-
-        val deletedCalls = allStored
-            .filter { "${it.date}_${it.number}" in deletedKeys }
-            .map { it.copy(deleted = true) }
-
-        val markedNewCalls = newCalls.map { call ->
+        val marked = windowCalls.map { call ->
             val key = "${call.date}_${call.number}"
-            call.copy(deleted = key !in systemKeys)
+            if (!call.deleted && key !in systemKeys) call.copy(deleted = true) else call
         }
 
-        // Send new calls plus newly detected deleted calls.
-        val toSend = markedNewCalls + deletedCalls
-
-        val err = if (toSend.isEmpty()) {
-            TelegramSender.sendNoBackup(token, chatId)
+        val err = if (marked.isEmpty()) {
+            TelegramSender.sendNoBackup(token, chatId, start, end)
         } else {
-            TelegramSender.send(toSend, token, chatId, lastCheck)
+            TelegramSender.send(marked, token, chatId, start, end)
         }
 
         return if (err == null) {
-            store.setLastCheckTime(now)
-            // IMPORTANT: do not delete old records from local storage.
-            // They are needed to detect a later phone-log deletion.
-            NotificationHelper.showResult(applicationContext, toSend.size, null)
+            // Advance the window only after Telegram confirms success.
+            prefs.edit().putLong("last_backup_ts", end).apply()
+            NotificationHelper.showResult(applicationContext, marked.size, null)
             Result.success()
         } else {
             NotificationHelper.showResult(applicationContext, 0, err)
