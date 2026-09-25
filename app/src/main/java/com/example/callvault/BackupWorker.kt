@@ -15,25 +15,46 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
         val lastCheck = store.getLastCheckTime()
         val now       = System.currentTimeMillis()
 
-        val newCalls = store.readSince(lastCheck)
+        val allStored = store.readAll()
+        val newCalls  = allStored.filter { it.date > lastCheck }
 
-        val err = if (newCalls.isEmpty()) {
+        // Check the CURRENT phone call log against every previously stored call.
+        // This catches calls that were backed up earlier and deleted later.
+        val systemKeys = CallLogReader(applicationContext).readKeys()
+
+        val deletedKeys = allStored
+            .filter { !it.deleted && it.date <= lastCheck }
+            .filter { "${it.date}_${it.number}" !in systemKeys }
+            .map { "${it.date}_${it.number}" }
+            .toSet()
+
+        if (deletedKeys.isNotEmpty()) {
+            store.markDeleted(deletedKeys)
+        }
+
+        val deletedCalls = allStored
+            .filter { "${it.date}_${it.number}" in deletedKeys }
+            .map { it.copy(deleted = true) }
+
+        val markedNewCalls = newCalls.map { call ->
+            val key = "${call.date}_${call.number}"
+            call.copy(deleted = key !in systemKeys)
+        }
+
+        // Send new calls plus newly detected deleted calls.
+        val toSend = markedNewCalls + deletedCalls
+
+        val err = if (toSend.isEmpty()) {
             TelegramSender.sendNoBackup(token, chatId)
         } else {
-            // Compare local store with current system call log
-            // Any call NOT in system log = user deleted it → mark with 🗑 symbol
-            val systemKeys = CallLogReader(applicationContext).readKeys()
-            val marked = newCalls.map { call ->
-                val key = "${call.date}_${call.number}"
-                call.copy(deleted = key !in systemKeys)
-            }
-            TelegramSender.send(marked, token, chatId, lastCheck)
+            TelegramSender.send(toSend, token, chatId, lastCheck)
         }
 
         return if (err == null) {
             store.setLastCheckTime(now)
-            if (newCalls.isNotEmpty()) store.clearBefore(now)
-            NotificationHelper.showResult(applicationContext, newCalls.size, null)
+            // IMPORTANT: do not delete old records from local storage.
+            // They are needed to detect a later phone-log deletion.
+            NotificationHelper.showResult(applicationContext, toSend.size, null)
             Result.success()
         } else {
             NotificationHelper.showResult(applicationContext, 0, err)

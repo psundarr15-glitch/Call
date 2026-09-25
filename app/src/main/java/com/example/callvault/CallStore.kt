@@ -9,8 +9,17 @@ class CallStore(ctx: Context) {
 
     fun addAll(entries: List<CallEntry>) {
         if (entries.isEmpty()) return
-        val lines = entries.joinToString("\n") { "${it.number}|${it.type}|${it.date}|${it.duration}" }
-        file.appendText(if (file.exists() && file.length() > 0) "\n$lines" else lines)
+
+        val existingKeys = readAll().map { key(it) }.toHashSet()
+        val newLines = entries
+            .filter { key(it) !in existingKeys }
+            .joinToString("\n") {
+                "${it.number}|${it.type}|${it.date}|${it.duration}|${if (it.deleted) 1 else 0}"
+            }
+
+        if (newLines.isNotEmpty()) {
+            file.appendText(if (file.exists() && file.length() > 0) "\n$newLines" else newLines)
+        }
     }
 
     fun readSince(ts: Long): List<CallEntry> =
@@ -18,20 +27,38 @@ class CallStore(ctx: Context) {
 
     fun readAll(): List<CallEntry> {
         if (!file.exists()) return emptyList()
+
         return file.readLines().filter { it.isNotBlank() }.mapNotNull { line ->
             val p = line.split("|")
-            if (p.size == 4) CallEntry(p[0], p[1].toInt(), p[2].toLong(), p[3].toLong()) else null
+            try {
+                when (p.size) {
+                    4 -> CallEntry(p[0], p[1].toInt(), p[2].toLong(), p[3].toLong(), false)
+                    5 -> CallEntry(p[0], p[1].toInt(), p[2].toLong(), p[3].toLong(), p[4] == "1")
+                    else -> null
+                }
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 
-    // Remove entries already sent (date <= sentUpTo), keep newer ones
-    fun clearBefore(sentUpTo: Long) {
-        val remaining = readAll().filter { it.date > sentUpTo }
-        if (remaining.isEmpty()) file.delete()
-        else file.writeText(remaining.joinToString("\n") {
-            "${it.number}|${it.type}|${it.date}|${it.duration}"
+    fun markDeleted(keys: Set<String>) {
+        if (keys.isEmpty() || !file.exists()) return
+
+        val updated = readAll().map { e ->
+            if (key(e) in keys) e.copy(deleted = true) else e
+        }
+
+        file.writeText(updated.joinToString("\n") {
+            "${it.number}|${it.type}|${it.date}|${it.duration}|${if (it.deleted) 1 else 0}"
         })
     }
+
+    private fun key(e: CallEntry): String = "${e.date}_${e.number}"
+
+    // Kept for compatibility with older code. Deleted/history records are
+    // intentionally retained so later phone-log deletions can be detected.
+    fun clearBefore(sentUpTo: Long) = Unit
 
     fun getLastCheckTime(): Long = prefs.getLong("last_check_ts", 0L)
     fun setLastCheckTime(ts: Long) = prefs.edit().putLong("last_check_ts", ts).apply()

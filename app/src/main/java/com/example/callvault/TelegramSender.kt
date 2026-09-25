@@ -38,8 +38,8 @@ object TelegramSender {
     private fun buildCsv(entries: List<CallEntry>): String {
         val sb = StringBuilder("Status,Type,Number,Date,Duration(s)\n")
         entries.forEach { e ->
-            // 🗑 symbol marks calls the user deleted from phone history
-            val status = if (e.deleted) "DELETED" else "OK"
+            // Mark calls removed from the phone call log clearly in the backup.
+            val status = if (e.deleted) "DELETED 🗑" else "OK"
             val type   = TYPE_LABEL[e.type] ?: "Unknown"
             val num    = e.number.ifBlank { "Unknown" }.replace(",", " ")
             sb.append("$status,$type,$num,${SDF.format(Date(e.date))},${e.duration}\n")
