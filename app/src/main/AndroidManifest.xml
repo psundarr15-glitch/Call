@@ -6,42 +6,31 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
         android:theme="@style/Theme.CallVault"
         android:label="JEEVI"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/ic_callvault_logo"
+        android:roundIcon="@drawable/ic_callvault_logo_round"
         android:allowBackup="false">
 
-        <activity
-            android:name=".MainActivity"
-            android:exported="true">
+        <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
 
-        <!-- Fires at 5 AM via AlarmManager.setAlarmClock -->
-        <receiver
-            android:name=".AlarmReceiver"
-            android:exported="false"/>
-
-        <!-- Reschedules alarm after phone reboot -->
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="true">
+        <receiver android:name=".AlarmReceiver"  android:exported="false"/>
+        <receiver android:name=".BootReceiver"   android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
             </intent-filter>
         </receiver>
-
-        <!-- Captures call end events immediately -->
-        <receiver
-            android:name=".CallReceiver"
-            android:exported="false">
+        <receiver android:name=".CallReceiver"   android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.PHONE_STATE"/>
             </intent-filter>
