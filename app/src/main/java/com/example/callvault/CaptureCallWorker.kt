@@ -4,13 +4,11 @@ import android.content.Context
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 
-// Triggered 3 seconds after every call ends
-// Reads the latest call log entry and saves to local CallStore
 class CaptureCallWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
 
     override fun doWork(): Result {
         val store       = CallStore(applicationContext)
-        val lastCapture = store.getLastCaptureTime()
+        val lastCapture = store.getLastCheckTime()   // Fix: was getLastCaptureTime
         val now         = System.currentTimeMillis()
 
         val newCalls = CallLogReader(applicationContext).read()
@@ -18,7 +16,7 @@ class CaptureCallWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, pa
 
         if (newCalls.isNotEmpty()) {
             store.addAll(newCalls)
-            store.setLastCaptureTime(now)
+            store.setLastCheckTime(now)              // Fix: was setLastCaptureTime
         }
 
         return Result.success()
