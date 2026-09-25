@@ -1,11 +1,5 @@
-# CallVault v4
-
-A redesigned dark-glass CallVault UI with a custom shield + phone logo.
-
-- Secure 6-digit PIN create/unlock screens
-- Privacy-focused dashboard
-- Daily 5:00 AM auto-backup scheduling
-- 30-second inactivity auto-lock
-- Call log count dialog
-- Custom vector launcher logo
-- No external UI library required
+# CallVault v3
+Fixed GitHub Actions: no `gradlew` is required; the workflow installs Gradle 8.10.
+First launch creates a 6-digit PIN. App locks after 30 seconds of inactivity.
+GitHub Secrets: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.
+Call-log access requires Android permission.
