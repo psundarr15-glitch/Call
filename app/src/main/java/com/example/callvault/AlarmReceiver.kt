@@ -8,16 +8,10 @@ import androidx.work.WorkManager
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val store = AlarmTimeStore(context)
-
-        // Show "alarm ringing" notification with sound + vibration
-        NotificationHelper.showAlarm(context, store.label())
-
-        // Run backup in WorkManager (background thread, waits for network)
+        // Run backup check (sends calls or "no new calls" message)
         WorkManager.getInstance(context)
             .enqueue(OneTimeWorkRequestBuilder<BackupWorker>().build())
-
-        // Reschedule for same time tomorrow
+        // Schedule the next 4-hour slot
         ScheduleHelper.schedule(context)
     }
 }
