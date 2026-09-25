@@ -20,7 +20,12 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
 
         // Every backup owns one time window. Nothing outside this window is sent.
         val savedStart = prefs.getLong("last_backup_ts", 0L)
-        val start = if (savedStart > 0L) savedStart else now - 60L * 60L * 1000L
+        val start = if (savedStart > 0L) savedStart else java.util.Calendar.getInstance().apply {
+            timeInMillis = now
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
         val end = now
 
         // Calls are captured continuously after each call. Select ONLY calls whose
@@ -46,6 +51,7 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
         return if (err == null) {
             // Advance the window only after Telegram confirms success.
             prefs.edit().putLong("last_backup_ts", end).apply()
+            BackupStatsStore(applicationContext).recordSent(end, marked.size)
             NotificationHelper.showResult(applicationContext, marked.size, null)
             Result.success()
         } else {
