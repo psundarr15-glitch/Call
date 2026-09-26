@@ -21,7 +21,7 @@ class BackupWorker(ctx: android.content.Context, params: WorkerParameters) : Wor
 
         // Full backup: send ALL stored calls, not only calls from the last 4 hours.
         val error = TelegramSender.sendFull(
-            calls = calls,
+            entries = calls,
             token = token,
             chatId = chatId,
             start = 0L,
