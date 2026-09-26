@@ -12,7 +12,7 @@
 - Bottom navigation across the main sections
 
 ## Backup automation
-- 4-hour incremental backup at 00/04/08/12/16/20
+- Full backup every 4 hours backup at 00/04/08/12/16/20
 - Daily full backup at 7:00 PM
 - Weekly full backup Tuesday and Friday at 5:00 PM
 - Deleted-call detection is persisted locally and shown as DELETED

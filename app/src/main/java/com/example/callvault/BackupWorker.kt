@@ -1,11 +1,16 @@
 package com.example.callvault
 
-import android.content.Context
 import androidx.work.Worker
 import androidx.work.WorkerParameters
-import java.util.Calendar
 
-class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params) {
+/**
+ * Rolling full backup:
+ * - A backup is due 4 hours after the previous successful backup.
+ * - It is NOT tied to fixed clock slots.
+ * - First run starts from the last stored checkpoint; if none exists,
+ *   it backs up the available calls and establishes the checkpoint.
+ */
+class BackupWorker(ctx: android.content.Context, params: WorkerParameters) : Worker(ctx, params) {
 
     override fun doWork(): Result {
         val token = BuildConfig.TELEGRAM_BOT_TOKEN
@@ -14,88 +19,25 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
 
         val store = CallStore(applicationContext)
         val now = System.currentTimeMillis()
-        val mode = inputData.getString(KEY_MODE) ?: ScheduleHelper.MODE_REGULAR
-        val systemKeys = CallLogReader(applicationContext).readKeys()
-        // Persist deletion state so the UI/history keeps the DELETED marker after a later run.
-        store.markDeleted(store.readAll().filter { !it.deleted && "${it.date}_${it.number}" !in systemKeys }
-            .map { "${it.date}_${it.number}" }.toSet())
+        val lastSent = store.getLastCheckTime()
 
-        val result = when (mode) {
-            ScheduleHelper.MODE_DAILY_FULL -> sendDailyFull(store, token, chatId, now, systemKeys)
-            ScheduleHelper.MODE_WEEKLY_FULL -> sendWeeklyFull(store, token, chatId, now, systemKeys)
-            else -> sendRegular(store, token, chatId, now, systemKeys)
+        // Only calls since the previous successful backup.
+        val calls = store.readAll().filter { it.date > lastSent && it.date <= now }
+
+        val err = if (calls.isEmpty()) {
+            TelegramSender.sendNoBackup(token, chatId)
+        } else {
+            TelegramSender.send(calls, token, chatId, lastSent)
         }
 
-        if (result.first == null) {
-            BackupStatsStore(applicationContext).recordSent(now, result.second)
-            val deletedCount = when (mode) {
-                ScheduleHelper.MODE_DAILY_FULL -> store.readAll().count { it.deleted }
-                ScheduleHelper.MODE_WEEKLY_FULL -> store.readAll().count { it.deleted }
-                else -> store.readAll().filter { it.date >= regularStartForHistory(now) && it.date < now }.count { it.deleted }
-            }
-            BackupHistoryStore(applicationContext).add(
-                BackupHistoryItem(now, mode, result.second, deletedCount, true)
-            )
-            NotificationHelper.showResult(applicationContext, result.second, null)
-            return Result.success()
+        return if (err == null) {
+            // Move the checkpoint only after a successful Telegram send.
+            store.setLastCheckTime(now)
+            NotificationHelper.showResult(applicationContext, calls.size, null)
+            Result.success()
+        } else {
+            NotificationHelper.showResult(applicationContext, 0, err)
+            Result.retry()
         }
-
-        NotificationHelper.showResult(applicationContext, 0, result.first)
-        return Result.retry()
-    }
-
-    private fun sendRegular(store: CallStore, token: String, chatId: String, now: Long, systemKeys: Set<String>): Pair<String?, Int> {
-        val prefs = applicationContext.getSharedPreferences("backup_window", Context.MODE_PRIVATE)
-        val cursor = prefs.getLong("incremental_cursor_ts", prefs.getLong("last_backup_ts", 0L))
-        val start = if (cursor > 0L) cursor else previousRegularSlot(now)
-        val entries = store.readAll().filter { it.date >= start && it.date < now }.map { markDeleted(it, systemKeys) }
-        val err = if (entries.isEmpty()) TelegramSender.sendNoBackup(token, chatId, start, now, "4-HOUR")
-                  else TelegramSender.send(entries, token, chatId, start, now, "4-HOUR")
-        if (err == null) prefs.edit().putLong("incremental_cursor_ts", now).putLong("last_backup_ts", now).apply()
-        return err to entries.size
-    }
-
-    private fun sendDailyFull(store: CallStore, token: String, chatId: String, now: Long, systemKeys: Set<String>): Pair<String?, Int> {
-        val start = Calendar.getInstance().apply {
-            timeInMillis = now
-            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        val entries = store.readAll().filter { it.date >= start && it.date <= now }.map { markDeleted(it, systemKeys) }
-        val err = TelegramSender.sendFull(entries, token, chatId, start, now, "DAILY FULL")
-        return err to entries.size
-    }
-
-    private fun sendWeeklyFull(store: CallStore, token: String, chatId: String, now: Long, systemKeys: Set<String>): Pair<String?, Int> {
-        val entries = store.readAll().map { markDeleted(it, systemKeys) }
-        val err = TelegramSender.sendFull(entries, token, chatId, 0L, now, "WEEKLY FULL")
-        return err to entries.size
-    }
-
-    private fun markDeleted(call: CallEntry, systemKeys: Set<String>): CallEntry {
-        val key = "${call.date}_${call.number}"
-        return if (!call.deleted && key !in systemKeys) call.copy(deleted = true) else call
-    }
-
-    private fun previousRegularSlot(now: Long): Long {
-        val c = Calendar.getInstance().apply {
-            timeInMillis = now
-            set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        }
-        val hour = c.get(Calendar.HOUR_OF_DAY)
-        val slot = (hour / 4) * 4
-        c.set(Calendar.HOUR_OF_DAY, slot)
-        if (c.timeInMillis >= now) c.add(Calendar.HOUR_OF_DAY, -4)
-        return c.timeInMillis
-    }
-
-    private fun regularStartForHistory(now: Long): Long {
-        val prefs = applicationContext.getSharedPreferences("backup_window", Context.MODE_PRIVATE)
-        val cursor = prefs.getLong("incremental_cursor_ts", 0L)
-        if (cursor > 0L) return cursor
-        return previousRegularSlot(now)
-    }
-
-    companion object {
-        const val KEY_MODE = "backup_mode"
     }
 }

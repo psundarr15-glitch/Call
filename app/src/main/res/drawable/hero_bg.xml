@@ -1,1 +1,2 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android"><gradient android:angle="0" android:startColor="#10283A" android:endColor="#0C1A2B"/><corners android:radius="24dp"/><stroke android:width="1dp" android:color="#21445A"/></shape>
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"><gradient android:angle="315" android:startColor="#123F48" android:centerColor="#152A4B" android:endColor="#111735"/><corners android:radius="28dp"/><stroke android:width="1dp" android:color="#3A6B78"/></shape>

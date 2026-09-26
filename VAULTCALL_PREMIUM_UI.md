@@ -17,9 +17,9 @@
    - Last sent
    - Deleted detected
 4. Backup timeline showing:
-   - 4-hour incremental
+   - Full backup every 4 hours
    - 7:00 PM daily full
-   - Tuesday/Friday 5:00 PM full
+   - Full backup every 4 hours only full
 5. Recent activity feed.
 6. Bottom navigation with Home / History / Schedule / Settings.
 
