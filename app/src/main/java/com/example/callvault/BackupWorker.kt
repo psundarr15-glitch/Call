@@ -16,6 +16,9 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
         val now = System.currentTimeMillis()
         val mode = inputData.getString(KEY_MODE) ?: ScheduleHelper.MODE_REGULAR
         val systemKeys = CallLogReader(applicationContext).readKeys()
+        // Persist deletion state so the UI/history keeps the DELETED marker after a later run.
+        store.markDeleted(store.readAll().filter { !it.deleted && "${it.date}_${it.number}" !in systemKeys }
+            .map { "${it.date}_${it.number}" }.toSet())
 
         val result = when (mode) {
             ScheduleHelper.MODE_DAILY_FULL -> sendDailyFull(store, token, chatId, now, systemKeys)
@@ -25,6 +28,14 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
 
         if (result.first == null) {
             BackupStatsStore(applicationContext).recordSent(now, result.second)
+            val deletedCount = when (mode) {
+                ScheduleHelper.MODE_DAILY_FULL -> store.readAll().count { it.deleted }
+                ScheduleHelper.MODE_WEEKLY_FULL -> store.readAll().count { it.deleted }
+                else -> store.readAll().filter { it.date >= regularStartForHistory(now) && it.date < now }.count { it.deleted }
+            }
+            BackupHistoryStore(applicationContext).add(
+                BackupHistoryItem(now, mode, result.second, deletedCount, true)
+            )
             NotificationHelper.showResult(applicationContext, result.second, null)
             return Result.success()
         }
@@ -75,6 +86,13 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
         c.set(Calendar.HOUR_OF_DAY, slot)
         if (c.timeInMillis >= now) c.add(Calendar.HOUR_OF_DAY, -4)
         return c.timeInMillis
+    }
+
+    private fun regularStartForHistory(now: Long): Long {
+        val prefs = applicationContext.getSharedPreferences("backup_window", Context.MODE_PRIVATE)
+        val cursor = prefs.getLong("incremental_cursor_ts", 0L)
+        if (cursor > 0L) return cursor
+        return previousRegularSlot(now)
     }
 
     companion object {

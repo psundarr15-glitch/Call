@@ -1,5 +1,30 @@
-# CallVault v3
-Fixed GitHub Actions: no `gradlew` is required; the workflow installs Gradle 8.10.
-First launch creates a 6-digit PIN. App locks after 30 seconds of inactivity.
-GitHub Secrets: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.
-Call-log access requires Android permission.
+# VaultCall — Premium Call Backup Vault
+
+## Included functional screens
+- PIN Create / PIN Unlock
+- Premium Dashboard
+- Call Records with number search
+- Contacts directory
+- Backup Schedule
+- Backup History from actual successful backup runs
+- Settings / Automation status
+- Security Info
+- Bottom navigation across the main sections
+
+## Backup automation
+- 4-hour incremental backup at 00/04/08/12/16/20
+- Daily full backup at 7:00 PM
+- Weekly full backup Tuesday and Friday at 5:00 PM
+- Deleted-call detection is persisted locally and shown as DELETED
+
+## Dashboard metrics
+- Next data send
+- Saved calls
+- Deleted calls
+- Last sent count
+- Successful backup count
+
+## Notes
+Telegram bot token/chat ID are still supplied through Gradle properties:
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="vc_bg">#070A12</color>
+    <color name="vc_surface">#101522</color>
+    <color name="vc_surface_2">#151C2C</color>
+    <color name="vc_border">#263149</color>
+    <color name="vc_text">#F6F8FC</color>
+    <color name="vc_muted">#8E9AAF</color>
+    <color name="vc_accent">#6FE7D2</color>
+    <color name="vc_accent_2">#7C8CFF</color>
+    <color name="vc_warning">#FFC857</color>
+    <color name="vc_danger">#FF6B81</color>
+    <color name="vc_success">#5BE7A9</color>
+</resources>
