@@ -115,13 +115,19 @@ class MainActivity : ComponentActivity() {
 
     private fun showDashboard() {
         val store=CallStore(this); val stats=BackupStatsStore(this)
-        val all=store.readAll(); val now=System.currentTimeMillis(); val backupMeta=getSharedPreferences("backup_window",0); val lastBackup=backupMeta.getLong("last_backup_ts",0L)
-        val currentStart=if(lastBackup>0)lastBackup else hourStart(now)
-        val next=nextHour(now); val windowPending=all.count{it.date>=currentStart && it.date<next}
+        val all=store.readAll(); val now=System.currentTimeMillis()
+        val backupMeta=getSharedPreferences("backup_window",0)
+        val cursor=backupMeta.getLong("incremental_cursor_ts", backupMeta.getLong("last_backup_ts",0L))
+        val event=ScheduleHelper.nextEvent(now)
+        val next=event.time
         val nextLabel=SimpleDateFormat("hh:mm a",Locale.getDefault()).format(Date(next))
+        val eventLabel=ScheduleHelper.modeLabel(event.mode)
+        val mins=((next-now).coerceAtLeast(0))/60000
+        val regularNext=nextRegularSlot(now)
+        val regularStart=if(cursor>0)cursor else previousRegularSlot(now)
+        val windowPending=all.count{it.date>=regularStart && it.date<regularNext}
         val lastSent=stats.lastSentAt(); val lastSentLabel=if(lastSent==0L)"Not sent yet" else SimpleDateFormat("dd MMM • hh:mm a",Locale.getDefault()).format(Date(lastSent))
         val lastCount=stats.lastSentCount(); val deleted=all.count{it.deleted}
-        val mins=((next-now).coerceAtLeast(0))/60000
 
         val l=root(false).also{it.setPadding(18.dp,22.dp,18.dp,26.dp)}
         val top=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL}
@@ -130,30 +136,32 @@ class MainActivity : ComponentActivity() {
         top.addView(tv("● LIVE",10f,ACCENT).also{it.setPadding(10.dp,7.dp,10.dp,7.dp);it.background=ContextCompat.getDrawable(this,R.drawable.pill_bg)})
         l.addView(top); l.addView(space(22))
         l.addView(tv("BACKUP COMMAND CENTER",11f,MUTED).also{it.gravity=Gravity.LEFT;it.letterSpacing=.16f}); l.addView(space(7))
-        l.addView(hero(nextLabel,mins)); l.addView(space(14))
+        l.addView(hero(nextLabel,mins,eventLabel)); l.addView(space(14))
 
         val grid=GridLayout(this).apply{columnCount=2;rowCount=2;layoutParams=LinearLayout.LayoutParams(-1,-2)}
-        grid.addView(statCard("NEXT BACKUP",nextLabel,"in ${mins/60}h ${mins%60}m",ACCENT))
-        grid.addView(statCard("NEXT WINDOW",windowPending.toString(),"calls waiting",BLUE))
+        grid.addView(statCard("NEXT BACKUP",nextLabel,eventLabel,ACCENT))
+        grid.addView(statCard("NEXT 4-HOUR WINDOW",windowPending.toString(),"calls waiting",BLUE))
         grid.addView(statCard("SAVED CALLS",all.size.toString(),"on this device",PURPLE))
         grid.addView(statCard("LAST SENT",if(lastSent==0L)"—" else lastCount.toString(),if(lastSent==0L)"no backup yet" else lastSentLabel,ACCENT))
         l.addView(grid); l.addView(space(14))
-        l.addView(section("CURRENT WINDOW", "${fmt(currentStart)}  →  ${fmt(next)}", "Only calls inside this 1-hour window will be sent."))
+        l.addView(section("SCHEDULE", "4-hour • Daily 7:00 PM • Tue/Fri 5:00 PM", "4-hour backups are incremental; scheduled full backups send the requested full data set."))
         l.addView(space(10))
-        l.addView(section("ARCHIVE", "${all.size} calls saved  •  ${deleted} marked deleted", "Records stay locally available for deletion detection."))
+        l.addView(section("NEXT 4-HOUR WINDOW", "${fmt(regularStart)}  →  ${fmt(regularNext)}", "$windowPending calls currently fall inside the next incremental window."))
         l.addView(space(10))
-        l.addView(section("DELIVERY", "Telegram hourly sync  •  ${stats.totalBackups()} successful backups", "Last successful send: $lastSentLabel"))
+        l.addView(section("ARCHIVE", "${all.size} calls saved  •  ${deleted} marked deleted", "Records stay locally available so later deletions can still be identified."))
+        l.addView(space(10))
+        l.addView(section("DELIVERY", "${stats.totalBackups()} successful sends  •  ${stats.totalSent()} rows sent", "Last successful send: $lastSentLabel"))
         l.addView(space(20))
         l.addView(tv("LOCK VAULT",11f,MUTED).also{v->v.letterSpacing=.18f;v.gravity=Gravity.CENTER;v.setPadding(30.dp,16.dp,30.dp,16.dp);v.setOnClickListener{unlocked=false;showPinEnter()}})
         setContentView(l)
     }
 
-    private fun hero(nextLabel:String,mins:Long)=LinearLayout(this).apply{
+    private fun hero(nextLabel:String,mins:Long,eventLabel:String)=LinearLayout(this).apply{
         orientation=LinearLayout.VERTICAL;background=ContextCompat.getDrawable(context,R.drawable.hero_bg);setPadding(20.dp,20.dp,20.dp,20.dp)
         addView(tv("NEXT DATA SEND",10f,ACCENT).also{it.gravity=Gravity.LEFT;it.letterSpacing=.15f})
         addView(tv(nextLabel,34f,WHITE).also{it.gravity=Gravity.LEFT;it.typeface=Typeface.create("sans-serif-black",0);it.setPadding(0,5.dp,0,0)})
-        addView(tv("Automatic hourly backup • ${mins/60}h ${mins%60}m remaining",12f,MUTED).also{it.gravity=Gravity.LEFT;it.setPadding(0,3.dp,0,0)})
-        addView(ProgressBar(context,null,android.R.attr.progressBarStyleHorizontal).apply{max=60;progress=(60-(mins%60)).toInt().coerceIn(0,60);layoutParams=LinearLayout.LayoutParams(-1,6.dp).also{it.setMargins(0,16.dp,0,0)}})
+        addView(tv("$eventLabel • ${mins/60}h ${mins%60}m remaining",12f,MUTED).also{it.gravity=Gravity.LEFT;it.setPadding(0,3.dp,0,0)})
+        addView(ProgressBar(context,null,android.R.attr.progressBarStyleHorizontal).apply{max=240;progress=(240-(mins%240)).toInt().coerceIn(0,240);layoutParams=LinearLayout.LayoutParams(-1,6.dp).also{it.setMargins(0,16.dp,0,0)}})
     }
     private fun statCard(label:String,value:String,sub:String,accent:Int)=TextView(this).apply{
         text="$label\n$value\n$sub";textSize=12f;setTextColor(MUTED);gravity=Gravity.CENTER;setPadding(10.dp,16.dp,10.dp,16.dp);background=ContextCompat.getDrawable(context,R.drawable.stat_bg);layoutParams=GridLayout.LayoutParams().apply{width=0;height=106.dp;columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);rowSpec=GridLayout.spec(GridLayout.UNDEFINED);setMargins(5.dp,5.dp,5.dp,5.dp)}
@@ -164,6 +172,21 @@ class MainActivity : ComponentActivity() {
     private fun fmt(ts:Long)=SimpleDateFormat("hh:mm a",Locale.getDefault()).format(Date(ts))
     private fun hourStart(ts:Long):Long=Calendar.getInstance().apply{timeInMillis=ts;set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}.timeInMillis
     private fun nextHour(ts:Long):Long=hourStart(ts)+60*60*1000L
+    private fun nextRegularSlot(ts:Long):Long {
+        val c=Calendar.getInstance().apply{timeInMillis=ts;set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}
+        val h=c.get(Calendar.HOUR_OF_DAY)
+        val next=((h/4)+1)*4
+        if(next>=24){c.add(Calendar.DAY_OF_YEAR,1);c.set(Calendar.HOUR_OF_DAY,0)}else c.set(Calendar.HOUR_OF_DAY,next)
+        return c.timeInMillis
+    }
+    private fun previousRegularSlot(ts:Long):Long {
+        val c=Calendar.getInstance().apply{timeInMillis=ts;set(Calendar.MINUTE,0);set(Calendar.SECOND,0);set(Calendar.MILLISECOND,0)}
+        val h=c.get(Calendar.HOUR_OF_DAY)
+        val slot=(h/4)*4
+        c.set(Calendar.HOUR_OF_DAY,slot)
+        if(c.timeInMillis>=ts)c.add(Calendar.HOUR_OF_DAY,-4)
+        return c.timeInMillis
+    }
     private fun tv(text:String,size:Float,color:Int)=TextView(this).apply{this.text=text;textSize=size;setTextColor(color);gravity=Gravity.CENTER}
     private fun space(dp:Int)=View(this).apply{layoutParams=LinearLayout.LayoutParams(-1,dp.dp)}
     private val Int.dp get()=(this*resources.displayMetrics.density).toInt()

@@ -17,23 +17,38 @@ object TelegramSender {
     private val BOUNDARY = "JeeviBoundary${System.currentTimeMillis()}"
 
     fun send(entries: List<CallEntry>, token: String, chatId: String,
-             start: Long, end: Long): String? {
+             start: Long, end: Long, schedule: String = "4-HOUR"): String? {
         return try {
             val csv = buildCsv(entries)
             val fileName = "jeevi_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date(end))}.csv"
             val window = "${DATE_FMT.format(Date(start))} to ${DATE_FMT.format(Date(end))}"
             val deleted = entries.count { it.deleted }
             val caption = buildString {
-                append("JEEVI Backup | $window | ${entries.size} calls")
+                append("JEEVI Backup | $schedule | $window | ${entries.size} calls")
                 if (deleted > 0) append(" | $deleted DELETED")
             }
             sendDocument(token, chatId, fileName, csv.toByteArray(Charsets.UTF_8), caption)
         } catch (e: Exception) { e.message ?: "Unknown error" }
     }
 
-    fun sendNoBackup(token: String, chatId: String, start: Long, end: Long): String? {
+    fun sendNoBackup(token: String, chatId: String, start: Long, end: Long, schedule: String = "4-HOUR"): String? {
         val window = "${DATE_FMT.format(Date(start))} to ${DATE_FMT.format(Date(end))}"
-        return sendText(token, chatId, "JEEVI | $window | No calls in this window")
+        return sendText(token, chatId, "JEEVI | $schedule | $window | No calls in this window")
+    }
+
+    fun sendFull(entries: List<CallEntry>, token: String, chatId: String,
+                 start: Long, end: Long, schedule: String): String? {
+        return try {
+            val csv = buildCsv(entries)
+            val fileName = "jeevi_${schedule.replace(' ', '_')}_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date(end))}.csv"
+            val range = if (start == 0L) "ALL SAVED DATA" else "${DATE_FMT.format(Date(start))} to ${DATE_FMT.format(Date(end))}"
+            val deleted = entries.count { it.deleted }
+            val caption = buildString {
+                append("JEEVI Backup | $schedule | $range | ${entries.size} calls")
+                if (deleted > 0) append(" | $deleted DELETED")
+            }
+            sendDocument(token, chatId, fileName, csv.toByteArray(Charsets.UTF_8), caption)
+        } catch (e: Exception) { e.message ?: "Unknown error" }
     }
 
     private fun buildCsv(entries: List<CallEntry>): String {
