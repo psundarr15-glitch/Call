@@ -77,7 +77,32 @@ class MainActivity : ComponentActivity() {
     }
     private fun dotRow()=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;setPadding(0,22.dp,0,18.dp);dots.clear();repeat(6){val d=View(context).apply{layoutParams=LinearLayout.LayoutParams(11.dp,11.dp).also{it.setMargins(6.dp,0,6.dp,0)};background=ContextCompat.getDrawable(context,R.drawable.dot_empty)};dots.add(d);addView(d)}}
     private fun refreshDots(){dots.forEachIndexed{i,v->v.background=ContextCompat.getDrawable(this,if(i<pinBuffer.length)R.drawable.dot_filled else R.drawable.dot_empty)}}
-    private fun numpad(onDigit:(Char)->Unit,onDelete:()->Unit)=GridLayout(this).apply{columnCount=3;rowCount=4;setPadding(12.dp,0,12.dp,0);listOf("1","2","3","4","5","6","7","8","9","","0","⌫").forEachIndexed{i,label->addView(tv(label,22f,if(label=="⌫")MUTED else WHITE).also{t->t.typeface=Typeface.DEFAULT_BOLD;t.layoutParams=GridLayout.LayoutParams().apply{width=82.dp;height=66.dp;setMargins(6.dp,6.dp,6.dp,6.dp);columnSpec=GridLayout.spec(i%3);rowSpec=GridLayout.spec(i/3)};if(label.isNotEmpty()){t.background=ContextCompat.getDrawable(context,R.drawable.key_bg);t.setOnClickListener{if(label=="⌫")onDelete()else onDigit(label[0])}}}})}
+    private fun numpad(onDigit: (Char) -> Unit, onDelete: () -> Unit): GridLayout =
+        GridLayout(this).apply {
+            columnCount = 3
+            rowCount = 4
+            setPadding(12.dp, 0, 12.dp, 0)
+            val labels = listOf("1","2","3","4","5","6","7","8","9","","0","⌫")
+            labels.forEachIndexed { i, label ->
+                val key = tv(label, 22f, if (label == "⌫") MUTED else WHITE).apply {
+                    typeface = Typeface.DEFAULT_BOLD
+                    layoutParams = GridLayout.LayoutParams().apply {
+                        width = 82.dp
+                        height = 66.dp
+                        setMargins(6.dp, 6.dp, 6.dp, 6.dp)
+                        columnSpec = GridLayout.spec(i % 3)
+                        rowSpec = GridLayout.spec(i / 3)
+                    }
+                    if (label.isNotEmpty()) {
+                        background = ContextCompat.getDrawable(this@MainActivity, R.drawable.key_bg)
+                        setOnClickListener {
+                            if (label == "⌫") onDelete() else onDigit(label[0])
+                        }
+                    }
+                }
+                addView(key)
+            }
+        }
 
     private fun openVault(){unlocked=true;lastInteraction=SystemClock.elapsedRealtime();requestPerms();requestBatteryExemption();ScheduleHelper.schedule(this);showDashboard()}
 
@@ -122,14 +147,43 @@ class MainActivity : ComponentActivity() {
     private fun showSettings(){activeTab=4;val p=page();p.addView(header("Settings","VAULTCALL CONTROL CENTER"));p.addView(space(16));p.addView(setting("Backup automation","4-hour + Daily 7 PM + Tue/Fri 5 PM","Active",ACCENT));p.addView(space(8));p.addView(setting("Telegram delivery","Secure document delivery","Configured by build settings",BLUE));p.addView(space(8));p.addView(setting("Battery protection","Background reliability","Open system settings",AMBER){requestBatteryExemption()});p.addView(space(8));p.addView(setting("PIN security","6-digit local vault lock","Enabled",PURPLE));p.addView(space(8));p.addView(setting("Contacts access","Used to display contact names","Grant permission",ACCENT){requestContacts()});p.addView(space(16));p.addView(action("SECURITY INFO","See privacy and protection details",BLUE){showSecurity()});p.addView(space(8));p.addView(action("LOCK VAULT","Require PIN again",RED){unlocked=false;showPinEnter()});setContentView(withNav(p,4))}
     private fun showSecurity(){val p=page();p.addView(header("Security Info","PRIVATE BY DESIGN"));p.addView(space(16));p.addView(section("LOCAL VAULT","PIN protected","The app locks after inactivity and stores its call archive locally."));p.addView(space(8));p.addView(section("DELETED CALL DETECTION","Enabled","Previously saved calls can be marked DELETED when they disappear from the phone call log."));p.addView(space(8));p.addView(section("DELIVERY","Telegram document","Backup CSV files are delivered through the configured Telegram bot."));p.addView(space(8));p.addView(section("SCHEDULE","Automated","4-hour incremental, daily 7 PM full, Tuesday/Friday 5 PM full."));p.addView(space(8));p.addView(section("APP LOCK","6-digit PIN","PIN is stored using Android encrypted preferences through the app's PIN store."));p.addView(space(18));p.addView(action("BACK TO SETTINGS","Return to controls",ACCENT){showSettings()});setContentView(scrollPage(p))}
 
-    private fun withNav(content:LinearLayout,selected:Int):LinearLayout{val wrap=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(BG);addView(scrollPage(content),LinearLayout.LayoutParams(-1,0,1f));val nav=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER;background=ColorDrawableCompat(SURFACE);setPadding(8.dp,8.dp,8.dp,10.dp)};listOf("⌂\nHome","◉\nCalls","◷\nSchedule","♙\nContacts","⚙\nSettings").forEachIndexed{i,label->nav.addView(tv(label,10f,if(i==selected)ACCENT else MUTED).apply{layoutParams=LinearLayout.LayoutParams(0,58.dp,1f);setPadding(3.dp,6.dp,3.dp,3.dp);setOnClickListener{when(i){0->showDashboard();1->showCalls();2->showSchedule();3->showContacts();4->showSettings()}}})};addView(nav)};return wrap}
+    private fun withNav(content: LinearLayout, selected: Int): LinearLayout {
+        val wrap = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(BG)
+            addView(scrollPage(content), LinearLayout.LayoutParams(-1, 0, 1f))
+            val nav = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                background = ColorDrawableCompat(SURFACE)
+                setPadding(8.dp, 8.dp, 8.dp, 10.dp)
+            }
+            listOf("⌂\nHome","◉\nCalls","◷\nSchedule","♙\nContacts","⚙\nSettings").forEachIndexed { i, label ->
+                nav.addView(tv(label, 10f, if (i == selected) ACCENT else MUTED).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, 58.dp, 1f)
+                    setPadding(3.dp, 6.dp, 3.dp, 3.dp)
+                    setOnClickListener {
+                        when (i) {
+                            0 -> showDashboard()
+                            1 -> showCalls()
+                            2 -> showSchedule()
+                            3 -> showContacts()
+                            4 -> showSettings()
+                        }
+                    }
+                })
+            }
+            addView(nav)
+        }
+        return wrap
+    }
 
     private fun hero(next:String,mins:Long,label:String)=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=ContextCompat.getDrawable(context,R.drawable.hero_bg);setPadding(20.dp,20.dp,20.dp,20.dp);addView(tv("NEXT DATA SEND",10f,ACCENT).also{it.gravity=Gravity.LEFT;it.letterSpacing=.15f});addView(tv(next,34f,WHITE).also{it.gravity=Gravity.LEFT;it.typeface=Typeface.create("sans-serif-black",0);it.setPadding(0,4.dp,0,0)});addView(tv("$label • ${mins/60}h ${mins%60}m remaining",11f,MUTED).also{it.gravity=Gravity.LEFT;it.setPadding(0,3.dp,0,0)})}
     private fun stat(label:String,value:String,sub:String,accent:Int)=TextView(this).apply{text="$label\n$value\n$sub";textSize=11f;setTextColor(MUTED);gravity=Gravity.CENTER;background=ContextCompat.getDrawable(context,R.drawable.stat_bg);setPadding(8.dp,14.dp,8.dp,14.dp);layoutParams=GridLayout.LayoutParams().apply{width=0;height=104.dp;columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);setMargins(5.dp,5.dp,5.dp,5.dp)};val s=android.text.SpannableString(text);val a=text.indexOf('\n');val b=text.indexOf('\n',a+1);s.setSpan(android.text.style.ForegroundColorSpan(accent),a+1,b,0);s.setSpan(android.text.style.RelativeSizeSpan(1.55f),a+1,b,0);setText(s)}
     private fun section(title:String,value:String,body:String)=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=ContextCompat.getDrawable(context,R.drawable.card_bg);setPadding(16.dp,14.dp,16.dp,14.dp);addView(tv(title,9f,MUTED).also{it.gravity=Gravity.LEFT;it.letterSpacing=.14f});addView(tv(value,15f,WHITE).also{it.gravity=Gravity.LEFT;it.typeface=Typeface.DEFAULT_BOLD;it.setPadding(0,5.dp,0,0)});addView(tv(body,10f,MUTED).also{it.gravity=Gravity.LEFT;it.setPadding(0,4.dp,0,0)})}
     private fun setting(title:String,value:String,status:String,color:Int,onClick:(()->Unit)?=null)=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;background=ContextCompat.getDrawable(context,R.drawable.card_bg);setPadding(16.dp,14.dp,14.dp,14.dp);addView(LinearLayout(context).apply{orientation=LinearLayout.VERTICAL;layoutParams=LinearLayout.LayoutParams(0,-2,1f);addView(tv(title,14f,WHITE).also{it.gravity=Gravity.LEFT;it.typeface=Typeface.DEFAULT_BOLD});addView(tv(value,10f,MUTED).also{it.gravity=Gravity.LEFT;it.setPadding(0,4.dp,0,0)})});addView(tv(status,9f,color).apply{setPadding(9.dp,6.dp,9.dp,6.dp);background=ContextCompat.getDrawable(context,R.drawable.pill_bg);if(onClick!=null)setOnClickListener{onClick()}})}
     private fun action(title:String,sub:String,color:Int,onClick:()->Unit)=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;background=ContextCompat.getDrawable(context,R.drawable.card_bg);setPadding(16.dp,15.dp,16.dp,15.dp);setOnClickListener{onClick()};addView(LinearLayout(context).apply{orientation=LinearLayout.VERTICAL;layoutParams=LinearLayout.LayoutParams(0,-2,1f);addView(tv(title,12f,color).also{it.gravity=Gravity.LEFT;it.typeface=Typeface.DEFAULT_BOLD});addView(tv(sub,10f,MUTED).also{it.gravity=Gravity.LEFT;it.setPadding(0,4.dp,0,0)})});addView(tv("›",25f,color))}
-    private fun searchBox(hint:String,onText:(String)->Unit)=EditText(this).apply{setHint(hint);setHintTextColor(MUTED);setTextColor(WHITE);textSize=13f;singleLine=true;background=ContextCompat.getDrawable(context,R.drawable.card_bg);setPadding(14.dp,0,14.dp,0);layoutParams=LinearLayout.LayoutParams(-1,52.dp);addTextChangedListener(object:android.text.TextWatcher{override fun beforeTextChanged(s:CharSequence?,st:Int,c:Int,a:Int){};override fun onTextChanged(s:CharSequence?,st:Int,b:Int,c:Int){onText(s?.toString() ?: "")};override fun afterTextChanged(s:android.text.Editable?){}})}
+    private fun searchBox(hint:String,onText:(String)->Unit)=EditText(this).apply{setHint(hint);setHintTextColor(MUTED);setTextColor(WHITE);textSize=13f;setSingleLine(true);background=ContextCompat.getDrawable(context,R.drawable.card_bg);setPadding(14.dp,0,14.dp,0);layoutParams=LinearLayout.LayoutParams(-1,52.dp);addTextChangedListener(object:android.text.TextWatcher{override fun beforeTextChanged(s:CharSequence?,st:Int,c:Int,a:Int){};override fun onTextChanged(s:CharSequence?,st:Int,b:Int,c:Int){onText(s?.toString() ?: "")};override fun afterTextChanged(s:android.text.Editable?){}})}
     private fun empty(title:String,body:String)=section("EMPTY",title,body)
     private fun typeLabel(t:Int)=when(t){1->"Incoming";2->"Outgoing";3->"Missed";4->"Voicemail";5->"Rejected";6->"Blocked";else->"Unknown"}
     private fun formatDate(ts:Long)=SimpleDateFormat("dd MMM yyyy • hh:mm a",Locale.getDefault()).format(Date(ts))
