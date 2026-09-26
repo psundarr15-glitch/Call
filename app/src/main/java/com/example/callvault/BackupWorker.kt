@@ -4,11 +4,11 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 
 /**
- * Rolling full backup:
- * - A backup is due 4 hours after the previous successful backup.
- * - It is NOT tied to fixed clock slots.
- * - First run starts from the last stored checkpoint; if none exists,
- *   it backs up the available calls and establishes the checkpoint.
+ * Runs the backup requested by AlarmReceiver.
+ *
+ * REGULAR     = incremental 4-hour backup
+ * DAILY_FULL  = complete saved call archive
+ * WEEKLY_FULL = complete saved call archive
  */
 class BackupWorker(ctx: android.content.Context, params: WorkerParameters) : Worker(ctx, params) {
 
@@ -20,24 +20,53 @@ class BackupWorker(ctx: android.content.Context, params: WorkerParameters) : Wor
         val store = CallStore(applicationContext)
         val now = System.currentTimeMillis()
         val lastSent = store.getLastCheckTime()
+        val mode = inputData.getString(KEY_MODE) ?: ScheduleHelper.MODE_REGULAR
 
-        // Only calls since the previous successful backup.
-        val calls = store.readAll().filter { it.date > lastSent && it.date <= now }
+        val (err, sentCount) = when (mode) {
+            ScheduleHelper.MODE_DAILY_FULL -> {
+                val calls = store.readAll()
+                TelegramSender.sendFull(
+                    calls, token, chatId, lastSent, now,
+                    ScheduleHelper.modeLabel(mode)
+                ) to calls.size
+            }
 
-        val err = if (calls.isEmpty()) {
-            TelegramSender.sendNoBackup(token, chatId)
-        } else {
-            TelegramSender.send(calls, token, chatId, lastSent)
+            ScheduleHelper.MODE_WEEKLY_FULL -> {
+                val calls = store.readAll()
+                TelegramSender.sendFull(
+                    calls, token, chatId, lastSent, now,
+                    ScheduleHelper.modeLabel(mode)
+                ) to calls.size
+            }
+
+            else -> {
+                val calls = store.readAll().filter { it.date > lastSent && it.date <= now }
+                val error = if (calls.isEmpty()) {
+                    TelegramSender.sendNoBackup(
+                        token, chatId, lastSent, now,
+                        ScheduleHelper.modeLabel(ScheduleHelper.MODE_REGULAR)
+                    )
+                } else {
+                    TelegramSender.send(
+                        calls, token, chatId, lastSent, now,
+                        ScheduleHelper.modeLabel(ScheduleHelper.MODE_REGULAR)
+                    )
+                }
+                error to calls.size
+            }
         }
 
         return if (err == null) {
-            // Move the checkpoint only after a successful Telegram send.
             store.setLastCheckTime(now)
-            NotificationHelper.showResult(applicationContext, calls.size, null)
+            NotificationHelper.showResult(applicationContext, sentCount, null)
             Result.success()
         } else {
             NotificationHelper.showResult(applicationContext, 0, err)
             Result.retry()
         }
+    }
+
+    companion object {
+        const val KEY_MODE = "backup_mode"
     }
 }
